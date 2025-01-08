@@ -1,0 +1,11 @@
+services:
+  llama32-3b:
+    container_name: llama32-3b
+    pull_policy: always
+    build:
+      context: .
+      dockerfile: ollama.dockerfile
+    ports:
+      - 11434:11434
+    restart: always
+    stop_signal: SIGKILL
