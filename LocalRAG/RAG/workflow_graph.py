@@ -1,23 +1,28 @@
+""" Rag execution graph declaration.
+
+"""
+
 import operator
+import os
 
+from typing import List, Annotated, Tuple
 from typing_extensions import TypedDict
-from typing import List, Annotated
-from langchain.schema import Document
-from langgraph.graph import END
 
+from langchain_core.messages import AIMessage
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain.schema import Document
+
+from langgraph.graph import END
 from langgraph.graph import StateGraph
 
-from langchain_community.tools.tavily_search import TavilySearchResults
-
-from RAG.Embeddings.EmbeddingInterface import EmbeddingInterface
-from RAG.Graders.Grader import AnswerGrader, HallucinationGrader, RetrievalGrader
-from RAG.LLMInterface import LLMInterface
-from RAG.Router import Router
-from RAG.Rag import Rag
+from .Embeddings.embedding_interface import EmbeddingInterface
+from .grader import AnswerGrader, HallucinationGrader, RetrievalGrader
+from .llm_agent import LLMAgent
+from .router import Router
 
 class GraphState(TypedDict):
     """
-    Graph state is a dictionary that contains information we want to 
+    Graph state is a dictionary that contains information we want to
     propagate to, and modify in each graph node.
     """
 
@@ -39,36 +44,40 @@ class WorkflowGraph:
     state_graph : StateGraph
 
     embedding_interface : EmbeddingInterface
-    llm_interface : LLMInterface
+    llm_agent : LLMAgent
 
     router : Router
-    rag: Rag
 
     retrieval_grader : RetrievalGrader
     hallucination_grader : HallucinationGrader
     answer_grader : AnswerGrader
-    
+
     web_search_tool : TavilySearchResults
 
-    def __init__(self, 
-                 embeding_interface: EmbeddingInterface, 
-                 llm_interface: LLMInterface ):
+    def __init__(self,
+                 embeding_interface: EmbeddingInterface,
+                 llm_agent: LLMAgent ):
 
         self.embedding_interface = embeding_interface
-        self.llm_interface = llm_interface
+        self.llm_agent = llm_agent
 
-        self.rag = Rag()
         self.router = Router()
 
         self.answer_grader = AnswerGrader()
         self.hallucination_grader = HallucinationGrader()
         self.retrieval_grader = RetrievalGrader()
 
-        self.web_search_tool = TavilySearchResults(k=3)
+        if "TAVILY_API_KEY" in os.environ:
+            self.web_search_tool = TavilySearchResults(k=3)
+        else:
+            print("Tavily API Key not found - Skipping initialization")
 
         self.construct_workflow()
-        
+
     def construct_workflow(self) :
+        """ Builds an execution graph to generate an answer given a specific
+        question.
+        """
 
         workflow = StateGraph(GraphState)
 
@@ -111,15 +120,44 @@ class WorkflowGraph:
 
         self.state_graph = workflow.compile()
 
-    def query(self, question:str, max_retries:int) : 
+    def get_workflow_visualisation(self) -> bytes :
+        """Get a visual representation of the workflow graph
+
+        Returns:
+            A png as bytes representing the graph
+        """
+
+        return self.state_graph.get_graph().draw_mermaid_png()
+
+    def execute(self, question:str, max_retries:int) -> Tuple[AIMessage, List[Document]]:
+        """ Runs the graph given a question and a maximum number of retries.
+
+        Args:
+            question : the question to run through the RAG
+            max_retries : the number of iterations to better the answer
+
+        Returns:
+            A tuple containing the generated answer and a list of documentary
+            sources originating from the underlying Vector DB or the web.
+        """
 
         inputs = {
             "question": question,
             "max_retries": max_retries,
         }
 
+        last_generation_ai_message = AIMessage("No content found")
+        last_generation_documents = []
+
         for event in self.state_graph.stream(inputs, stream_mode="values"):
             print(event)
+
+            if "generation" in event :
+                last_generation_ai_message = event.get("generation", last_generation_ai_message)
+                last_generation_documents = event.get("documents", last_generation_documents)
+
+        # End of graph, return answer
+        return last_generation_ai_message, last_generation_documents
 
     ### Nodes
     def retrieve(self, state : dict):
@@ -137,7 +175,7 @@ class WorkflowGraph:
 
         # Write retrieved documents to documents key in state
         documents = self.embedding_interface.get_documents(query=question)
-        
+
         return {"documents": documents}
 
 
@@ -157,10 +195,10 @@ class WorkflowGraph:
         loop_step = state.get("loop_step", 0)
 
         # RAG generation
-        generation = self.rag.query(llm=self.llm_interface.llm, 
-                                    documents=documents, 
-                                    question=question)
-        
+        generation = self.llm_agent.run_rag_query_on_documents(json_mode=False,
+                                              documents=documents,
+                                              question=question)
+
         return {"generation": generation, "loop_step": loop_step + 1}
 
 
@@ -186,9 +224,9 @@ class WorkflowGraph:
 
         for d in documents:
 
-            grade = self.retrieval_grader.grade(llm=self.llm_interface.llm_json_mode, 
-                                                question=question, 
-                                                answer=d.page_content)["binary_score"]
+            grade = self.retrieval_grader.execute(llm_agent=self.llm_agent,
+                                                  question=question,
+                                                  answer=d.page_content)["binary_score"]
 
             # Document relevant
             if grade.lower() == "yes":
@@ -221,10 +259,17 @@ class WorkflowGraph:
         documents = state.get("documents", [])
 
         # Web search
-        docs = self.web_search_tool.invoke({"query": question})
-        web_results = "\n".join([d["content"] for d in docs])
-        web_results = Document(page_content=web_results)
-        documents.append(web_results)
+        if self.web_search_tool :
+
+            docs = self.web_search_tool.invoke({"query": question})
+
+            for web_document in docs :
+
+                documents.append(Document(page_content=web_document["content"],
+                                          metadata={"source": web_document["url"],
+                                                    "title": web_document["url"],
+                                                    "origin": "web search"}))
+
         return {"documents": documents}
 
     ### Edges Definition
@@ -241,10 +286,11 @@ class WorkflowGraph:
         """
 
         print("---ROUTE QUESTION---")
-        
-        source = self.router.route(self.llm_interface.llm_json_mode, 
-                                   state["question"])["datasource"]
-        
+
+        source = self.router.route(self.llm_agent,
+                                   state["question"],
+                                   self.embedding_interface.get_store_topics())["datasource"]
+
         if source == "websearch":
             print("---ROUTE QUESTION TO WEB SEARCH---")
             return "websearch"
@@ -253,7 +299,7 @@ class WorkflowGraph:
             return "vectorstore"
 
 
-    def decide_to_generate(state):
+    def decide_to_generate(self, state : dict):
         """
         Determines whether to generate an answer, or add web search
 
@@ -297,9 +343,11 @@ class WorkflowGraph:
         generation = state["generation"]
         max_retries = state.get("max_retries", 3)  # Default to 3 if not provided
 
-        grade = self.hallucination_grader.grade(llm=self.llm_interface.llm_json_mode, 
-                                                question=self.rag.format_docs(documents), 
-                                                answer=generation.content)
+        documents_as_text = self.llm_agent.concatenate_documents(documents)
+
+        grade = self.hallucination_grader.execute(llm_agent=self.llm_agent,
+                                                  question=documents_as_text,
+                                                  answer=generation.content)
 
         # Check hallucination
         if grade == "yes":
@@ -308,10 +356,10 @@ class WorkflowGraph:
             # Check question-answering
             print("---GRADE GENERATION vs QUESTION---")
 
-            grade = self.answer_grader.grade(llm=self.llm_interface.llm_json_mode,
-                                             question=question, 
-                                             answer=generation.content)["binary_score"]
-            
+            grade = self.answer_grader.execute(llm_agent=self.llm_agent,
+                                               question=question,
+                                               answer=generation.content)["binary_score"]
+
             if grade == "yes":
                 print("---DECISION: GENERATION ADDRESSES QUESTION---")
                 return "useful"
@@ -321,7 +369,7 @@ class WorkflowGraph:
             else:
                 print("---DECISION: MAX RETRIES REACHED---")
                 return "max retries"
-            
+
         elif state["loop_step"] <= max_retries:
             print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RETRY---")
             return "not supported"
