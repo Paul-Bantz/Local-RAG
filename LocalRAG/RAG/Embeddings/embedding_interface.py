@@ -1,6 +1,7 @@
 """ I/O Interface with a vector datastore
 """
 
+import os
 from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
@@ -18,9 +19,18 @@ class EmbeddingInterface:
     text_splitter : RecursiveCharacterTextSplitter
 
     def __init__(self):
-        """ Initialize an inmemory vector store and a text splitter
+        """ If Chroma Host is set, will attempt to connect to the running instance,
+         else defaults to an in-memory vector store
         """
-        self.vectorstore = vector_store.InMemoryVectorStore()
+
+        chroma_host=os.environ.get('LLM_HOST')
+        chroma_token=os.environ.get('LLM_MODEL')
+
+        if chroma_host:
+            self.vectorstore = vector_store.InMemoryVectorStore()
+        else:
+            self.vectorstore = vector_store.InMemoryVectorStore()
+
         self.text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=1000,
                                                                                   chunk_overlap=200)
 

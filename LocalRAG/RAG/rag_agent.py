@@ -28,7 +28,7 @@ class RagAgent:
 
         self.embedding_interface = EmbeddingInterface()
         self.llm_agent = LLMAgent(server=llm_host,
-                                      model=llm_model)
+                                  model=llm_model)
 
         self.workflow_graph = WorkflowGraph(embeding_interface=self.embedding_interface,
                                             llm_agent=self.llm_agent)

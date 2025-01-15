@@ -1,19 +1,23 @@
 
-## Python requirements
+# Local RAG Demo
 
-```bash
-pip install -r requirements.txt
-```
+This project is an extension of [Local RAG agent with LLaMA3](https://langchain-ai.github.io/langgraph/tutorials/rag/langgraph_adaptive_rag_local/)
+
+This is a demo project showcasing the use of Langchain in a RAG context. It relies on an Ollama server running a Llama3 llm.
+
+Building blocks :
+- [streamlit](https://streamlit.io/) GUI for LLM interaction
+- [In-memory](https://python.langchain.com/docs/integrations/vectorstores/sklearn/) vector store (see [Rag App](#rag-app))
+- [Nomic Embedding model](https://www.nomic.ai/blog/posts/local-nomic-embed)
+- Extra data used for answer correctness are provided through websearch using the [Tavily API](https://tavily.com/).
 
 ## Building and running
-
-Project can be run with compose - `podman compose up` or be ran as standalone containers :
 
 ### Ollama agent :
 For best performance, run the container on a gpu.
 
 ```bash
-podman build -t ollama-llama32-3b ollama.dockerfile
+podman build -t llama32-3b -f Dockerfiles/ollama.dockerfile Dockerfiles
 podman run -d \
 --name ollama \
 --replace \
@@ -23,20 +27,17 @@ podman run -d \
 -p 11434:11434 \
 -v ollama:/root/.ollama \
 --stop-signal=SIGKILL \
-ollama-llama32-3b
+llama32-3b
 ```
 
 ### Rag App :
 
 ```bash
-podman build -t local-rag -f Dockerfiles/local_rag.dockerfile .
-podman run -d \
---name local-rag \
---replace \
---restart=always \
--e TAVILY_API_KEY='<Tavily_API_Key_goes_here>' \
--e LLM_HOST='<LLM_host_url_goes_here>' \
--e LLM_MODEL='<Model_name_goes_here>' \
-local-rag
+streamlit run LocalRag/streamlit_app.py
 ```
 
+#### Environment variables
+
+- **TAVILY_API_KEY** : your [Tavily](https://pages.github.com/) API Key for the websearch functionnality
+- **LLM_HOST** : host and port of the server running your model ([http://localhost:11434](http://localhost:11434 by default)
+- **LLM_MODEL** : name of the model running on the ollama instance (**llama3.2:3b-instruct-fp16** if using the provided ollama.dockerfile)

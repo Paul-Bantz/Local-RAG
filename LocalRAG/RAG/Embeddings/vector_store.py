@@ -6,6 +6,7 @@ from typing import List
 
 from langchain_core.documents import Document
 from langchain_community.vectorstores import SKLearnVectorStore
+from langchain_community.vectorstores import Chroma
 from langchain_nomic import NomicEmbeddings
 
 class VectorStore(ABC):
@@ -61,7 +62,6 @@ class VectorStore(ABC):
         Returns:
             A list of documents and associated metadata contained in the store
         """
-
 class InMemoryVectorStore(VectorStore):
     """ Definition for a simple in-memory vector store
 

@@ -9,10 +9,14 @@ services:
       - 11434:11434
     restart: always
     stop_signal: SIGKILL
+    devices:
+        - nvidia.com/gpu=all
+    security_opt:
+        - label=disable
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+            - driver: nvidia
+              device_ids: ['nvidia.com/gpu=0']
+              capabilities: [gpu]
