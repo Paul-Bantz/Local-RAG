@@ -15,3 +15,4 @@ tavily-python==0.5.0
 bs4==0.0.2
 IPython==8.18.1
 nomic[local]==3.3.4
+gpt4all[cuda]

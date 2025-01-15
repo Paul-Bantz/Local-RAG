@@ -2,6 +2,7 @@
 """
 
 from abc import ABC, abstractmethod
+import os
 from typing import List
 
 from langchain_core.documents import Document
@@ -94,9 +95,13 @@ class InMemoryVectorStore(VectorStore):
         The store is initialized with a local nomic embedding model running on
         the gpu
         """
-        nomic_embedding = NomicEmbeddings(model="nomic-embed-text-v1.5",
+
+        embedding_model =os.environ.get('NOMIC_EMBEDDING_MODEL')
+        embedding_device =os.environ.get('GPU_DEVICE')
+
+        nomic_embedding = NomicEmbeddings(model=embedding_model,
                                          inference_mode="local",
-                                         device='gpu')
+                                         device=embedding_device)
 
         self._store = SKLearnVectorStore(embedding=nomic_embedding)
         self._retriever = self._store.as_retriever(k=3)
