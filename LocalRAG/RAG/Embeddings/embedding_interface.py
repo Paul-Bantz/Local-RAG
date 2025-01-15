@@ -31,7 +31,6 @@ class EmbeddingInterface:
             documents_source: a list of tuple (urls and topics) from which to
                 generate the embeddings
         """
-        print("Loading url set in Vector Store")
 
         # Load documents
         docs = [WebBaseLoader(document[0]).load() for document in documents_source]

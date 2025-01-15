@@ -5,8 +5,14 @@ services:
     build:
       context: .
       dockerfile: ollama.dockerfile
-      image: ollama-llama32-3b
     ports:
       - 11434:11434
     restart: always
     stop_signal: SIGKILL
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all

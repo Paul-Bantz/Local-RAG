@@ -4,6 +4,7 @@
 
 import operator
 import os
+import logging
 
 from typing import List, Annotated, Tuple
 from typing_extensions import TypedDict
@@ -41,6 +42,8 @@ class WorkflowGraph:
     with information store in the underlying vector store and / or a websearch
     """
 
+    logger = logging.getLogger(__name__)
+
     state_graph : StateGraph
 
     embedding_interface : EmbeddingInterface
@@ -58,6 +61,8 @@ class WorkflowGraph:
                  embeding_interface: EmbeddingInterface,
                  llm_agent: LLMAgent ):
 
+        logging.basicConfig(level=logging.INFO)
+
         self.embedding_interface = embeding_interface
         self.llm_agent = llm_agent
 
@@ -70,7 +75,7 @@ class WorkflowGraph:
         if "TAVILY_API_KEY" in os.environ:
             self.web_search_tool = TavilySearchResults(k=3)
         else:
-            print("Tavily API Key not found - Skipping initialization")
+            self.logger.error('🔴 Tavily API Key not found - Skipping initialization')
 
         self.construct_workflow()
 
@@ -82,10 +87,10 @@ class WorkflowGraph:
         workflow = StateGraph(GraphState)
 
         # Define the nodes
-        workflow.add_node("websearch", self.web_search)  # web search
-        workflow.add_node("retrieve", self.retrieve)  # retrieve
-        workflow.add_node("grade_documents", self.grade_documents) # grade documents
-        workflow.add_node("generate", self.generate)  # generate
+        workflow.add_node("websearch", self.web_search)
+        workflow.add_node("retrieve", self.retrieve)
+        workflow.add_node("grade_documents", self.grade_documents)
+        workflow.add_node("generate", self.generate)
 
         # Build graph
         workflow.set_conditional_entry_point(
@@ -150,7 +155,6 @@ class WorkflowGraph:
         last_generation_documents = []
 
         for event in self.state_graph.stream(inputs, stream_mode="values"):
-            print(event)
 
             if "generation" in event :
                 last_generation_ai_message = event.get("generation", last_generation_ai_message)
@@ -170,7 +174,7 @@ class WorkflowGraph:
         Returns:
             state (dict): New key added to state, documents, that contains retrieved documents
         """
-        print("---RETRIEVE---")
+        self.logger.info('- Retrieving documents from vectorstore')
         question = state["question"]
 
         # Write retrieved documents to documents key in state
@@ -189,7 +193,7 @@ class WorkflowGraph:
         Returns:
             state (dict): New key added to state, generation, that contains LLM generation
         """
-        print("---GENERATE---")
+        self.logger.info('- RAG Generation')
         question = state["question"]
         documents = state["documents"]
         loop_step = state.get("loop_step", 0)
@@ -214,7 +218,7 @@ class WorkflowGraph:
             state (dict): Filtered out irrelevant documents and updated web_search state
         """
 
-        print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+        self.logger.info('- Checking document relevance to the question')
         question = state["question"]
         documents = state["documents"]
 
@@ -230,18 +234,17 @@ class WorkflowGraph:
 
             # Document relevant
             if grade.lower() == "yes":
-                print("---GRADE: DOCUMENT RELEVANT---")
+                self.logger.info('- 🔵 Document is relevant')
                 filtered_docs.append(d)
             # Document not relevant
             else:
-                print("---GRADE: DOCUMENT NOT RELEVANT---")
+                self.logger.info('- 🔴 Document is not relevant')
                 # We do not include the document in filtered_docs
                 # We set a flag to indicate that we want to run web search
                 web_search = "Yes"
                 continue
 
         return {"documents": filtered_docs, "web_search": web_search}
-
 
     def web_search(self, state : dict):
         """
@@ -254,7 +257,7 @@ class WorkflowGraph:
             state (dict): Appended web results to documents
         """
 
-        print("---WEB SEARCH---")
+        self.logger.info('- Running websearch...')
         question = state["question"]
         documents = state.get("documents", [])
 
@@ -285,17 +288,17 @@ class WorkflowGraph:
             str: Next node to call
         """
 
-        print("---ROUTE QUESTION---")
+        self.logger.info('- Routing question')
 
         source = self.router.route(self.llm_agent,
                                    state["question"],
                                    self.embedding_interface.get_store_topics())["datasource"]
 
         if source == "websearch":
-            print("---ROUTE QUESTION TO WEB SEARCH---")
+            self.logger.info('\t→ Routing to websearch')
             return "websearch"
         elif source == "vectorstore":
-            print("---ROUTE QUESTION TO RAG---")
+            self.logger.info('\t→ Routing to RAG')
             return "vectorstore"
 
 
@@ -310,19 +313,17 @@ class WorkflowGraph:
             str: Binary decision for next node to call
         """
 
-        print("---ASSESS GRADED DOCUMENTS---")
+        self.logger.info('- Assessing whether performing further websearch or not')
         web_search = state["web_search"]
 
         if web_search == "Yes":
             # All documents have been filtered check_relevance
             # We will re-generate a new query
-            print(
-                "---DECISION: NOT ALL DOCUMENTS ARE RELEVANT TO QUESTION, INCLUDE WEB SEARCH---"
-            )
+            self.logger.info('\t → All documents are not relevant, routing to websearch')
             return "websearch"
         else:
             # We have relevant documents, so generate answer
-            print("---DECISION: GENERATE---")
+            self.logger.info('\t → Documents are relevant - generate answer')
             return "generate"
 
 
@@ -337,7 +338,7 @@ class WorkflowGraph:
             str: Decision for next node to call
         """
 
-        print("---CHECK HALLUCINATIONS---")
+        self.logger.info('- Checking for hallucinations')
         question = state["question"]
         documents = state["documents"]
         generation = state["generation"]
@@ -352,27 +353,26 @@ class WorkflowGraph:
         # Check hallucination
         if grade == "yes":
 
-            print("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---")
-            # Check question-answering
-            print("---GRADE GENERATION vs QUESTION---")
+            self.logger.info('\t→ Verifying pertinence of answer vs question')
 
+            # Check question-answering
             grade = self.answer_grader.execute(llm_agent=self.llm_agent,
                                                question=question,
                                                answer=generation.content)["binary_score"]
 
             if grade == "yes":
-                print("---DECISION: GENERATION ADDRESSES QUESTION---")
+                self.logger.info('\t→ 🔵 Generation addresses question.')
                 return "useful"
             elif state["loop_step"] <= max_retries:
-                print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
+                self.logger.info('\t→ 🔴 Generation does not addresses question.')
                 return "not useful"
             else:
-                print("---DECISION: MAX RETRIES REACHED---")
+                self.logger.info('\t→ ⭕ Max retry count reached')
                 return "max retries"
 
         elif state["loop_step"] <= max_retries:
-            print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RETRY---")
+            self.logger.info('- Generation is not grounded in documents, retrying')
             return "not supported"
         else:
-            print("---DECISION: MAX RETRIES REACHED---")
+            self.logger.info('Max retry count reached')
             return "max retries"

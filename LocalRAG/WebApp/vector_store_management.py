@@ -1,13 +1,12 @@
 """ Basic UI to manage a vector store and visualize its contents
 """
 
+import asyncio
 import streamlit as st
 import pandas as pd
 
 from streamlit_free_text_select import st_free_text_select
-from LocalRAG.RAG.rag_agent import RagAgent
-
-st.set_page_config(page_title="Vector store", page_icon="🤖")
+from RAG.rag_agent import RagAgent
 
 @st.cache_resource
 def load_rag_agent():
@@ -40,7 +39,13 @@ def display_in_memory_store_gui():
     for session_doc in session_documents:
         url_col.append(session_doc[0])
         topic_col.append(session_doc[1])
-        embedding_stat_col.append(session_doc in stored_documents)
+
+        embedding_status = ""
+
+        if session_doc in stored_documents:
+            embedding_status = "☑️"
+
+        embedding_stat_col.append(embedding_status)
 
     dataframe = pd.DataFrame(
         {
@@ -50,6 +55,14 @@ def display_in_memory_store_gui():
         }
     )
     st.dataframe(data=dataframe, use_container_width=True)
+
+async def embed_documents(docs: list):
+
+    st.toast('Embedding in progress', icon='⌛')
+
+    rag_agent.embed_documents(docs)
+
+    st.rerun()
 
 # Page GUI
 
@@ -74,11 +87,17 @@ with st.form("embed_doc_form", clear_on_submit=True):
         label_visibility="visible",
     )
 
-    if st.form_submit_button("Submit"):
+    if st.form_submit_button(label="Submit",
+                             disabled=st.session_state.get("run_button", False)):
 
         is_new_document = True
 
         for doc in session_documents:
+
+            # Make sure we dont insert duplicate topics due to case sensitivity
+            if doc[1].lower() == topic.lower():
+                topic = doc[1].lower()
+
             if doc[1].lower() == topic.lower() and doc[0].lower() == url_input_val.lower():
                 is_new_document = False
                 break
@@ -101,6 +120,4 @@ if st.button(label="Embed documents",
              disabled=st.session_state.get("run_button", False) or len(docs_to_embed)==0,
              key='run_button') :
 
-
-    rag_agent.embed_documents(docs_to_embed)
-    st.rerun()
+    asyncio.run(embed_documents(docs_to_embed))

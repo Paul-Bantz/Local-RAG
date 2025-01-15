@@ -2,11 +2,9 @@
 """
 import streamlit as st
 
-from LocalRAG.RAG.rag_agent import RagAgent
+from RAG.rag_agent import RagAgent
 
 # Page GUI
-
-st.set_page_config(page_title="Rag Workflow", page_icon="🤖")
 st.title("Rag Workflow")
 
 @st.cache_resource

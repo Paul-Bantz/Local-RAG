@@ -7,9 +7,9 @@ from typing import List, Tuple
 from langchain_core.messages import AIMessage
 from langchain.schema import Document
 
-from LocalRAG.RAG.llm_agent import LLMAgent
-from LocalRAG.RAG.Embeddings.embedding_interface import EmbeddingInterface
-from LocalRAG.RAG.workflow_graph import WorkflowGraph
+from RAG.llm_agent import LLMAgent
+from RAG.Embeddings.embedding_interface import EmbeddingInterface
+from RAG.workflow_graph import WorkflowGraph
 
 class RagAgent:
     """ Main class of declaration of a RAG Agent.
@@ -23,8 +23,8 @@ class RagAgent:
 
     def __init__(self):
 
-        llm_host=os.environ.get('LLM_HOST',"localhost:11434")
-        llm_model=os.environ.get('LLM_MODEL', "llama3.2:3b-instruct-fp16")
+        llm_host=os.environ.get('LLM_HOST')
+        llm_model=os.environ.get('LLM_MODEL')
 
         self.embedding_interface = EmbeddingInterface()
         self.llm_agent = LLMAgent(server=llm_host,

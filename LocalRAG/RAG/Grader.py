@@ -3,7 +3,7 @@ grade the relevance of the output corresponding to the input.
 """
 
 import abc
-from LocalRAG.RAG.llm_agent import LLMAgent
+from RAG.llm_agent import LLMAgent
 
 class Grader(metaclass=abc.ABCMeta):
     """ Abstract class definition for a grading agent

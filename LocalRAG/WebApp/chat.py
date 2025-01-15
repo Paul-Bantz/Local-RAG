@@ -1,19 +1,17 @@
-""" RAG Gui Entrypoint provides a basic UI to embed and query an LLM
+""" Chat GUI
 """
 
-import os
 from typing import List
 import streamlit as st
 
 from langchain_core.messages import HumanMessage,AIMessage
 from langchain.schema import Document
 
-from LocalRAG.RAG.rag_agent import RagAgent
+from RAG.rag_agent import RagAgent
 
 AI_RESPONSE_TEMPLATE = """
                       {response}\n\n**Sources**\n{sources}
                       """
-
 def format_document_sources(doc_source : List[Document]) -> str:
     """ Format a list of Documents as a sources bullet list
 
@@ -44,8 +42,6 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # Page GUI
-
-st.set_page_config(page_title="Local RAG", page_icon="🤖")
 st.title("Local RAG")
 
 @st.cache_resource
