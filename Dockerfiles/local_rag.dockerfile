@@ -1,9 +1,8 @@
 FROM nvidia/cuda:12.6.3-base-ubuntu24.04
 
-RUN apt-get update && apt-get install -y \
-    python3-pip
-
-RUN rm /usr/lib/python*/EXTERNALLY-MANAGED
+RUN apt-get update \
+ && apt-get install -y python3-pip \
+ && rm /usr/lib/python*/EXTERNALLY-MANAGED
 
 WORKDIR /app/LocalRAG
 COPY ./LocalRAG/ .

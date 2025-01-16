@@ -19,50 +19,41 @@ Entrypoint is `streamlit streamlit_app.py` (see [Running your streamlit app](htt
 
 ## Running in containers
 
-### Host setup
+### Via compose
 
-Enabling Docker/Podman to run on the GPU is recommended.
-
-For Nvidia chips, see [Install the Nvidia container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-with-yum-or-dnf), and generate the CDI specifications:
 ```bash
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
-      tee /etc/yum.repos.d/nvidia-container-toolkit.repo
-
-sudo yum install -y nvidia-container-toolkit
-
-sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+docker-compose -f .\Dockerfiles\compose.yaml -p "local-rag-stack" up
 ```
 
-### Ollama agent :
+### Manually
+
+#### Ollama agent :
 
 Run the container on a dedicated network (`docker network create rag-network`)
 ```bash
-podman build -t llama32-3b -f Dockerfiles/ollama.dockerfile Dockerfiles
+docker build -t llama32-3b -f Dockerfiles/ollama.dockerfile Dockerfiles
 
-podman run -d \
+docker run -d \
 --name ollama \
+--gpus=all \
 --network=rag-network \
---replace \
 --restart=always \
---device nvidia.com/gpu=all \
---security-opt=label=disable \
 -p 11434:11434 \
 -v ollama:/root/.ollama \
 --stop-signal=SIGKILL \
 llama32-3b
 ```
 
-### RAG App :
+#### RAG App :
 
 ```bash
-podman build -t local-rag -f Dockerfiles/local_rag.dockerfile .
+docker build -t local-rag -f Dockerfiles/local_rag.dockerfile .
 
-podman run -d \
+docker run -d \
 --name local-rag \
+--gpus=all \
 --network=rag-network \
---replace \
 --restart=always \
---device nvidia.com/gpu=all \
 --security-opt=label=disable \
 --network="host" `# Necessary if the ollama server is running locally ie at the hosts localhost` \
 -p 8501:8501 \
