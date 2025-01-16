@@ -2,6 +2,7 @@
 """
 
 import os
+import uuid
 from typing import List
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
@@ -23,11 +24,8 @@ class EmbeddingInterface:
          else defaults to an in-memory vector store
         """
 
-        chroma_host=os.environ.get('LLM_HOST')
-        chroma_token=os.environ.get('LLM_MODEL')
-
-        if chroma_host:
-            self.vectorstore = vector_store.InMemoryVectorStore()
+        if 'CHROMA_HOST' in os.environ:
+            self.vectorstore = vector_store.ChromaVectorStore()
         else:
             self.vectorstore = vector_store.InMemoryVectorStore()
 
@@ -42,23 +40,33 @@ class EmbeddingInterface:
                 generate the embeddings
         """
 
-        # Load documents
-        docs = [WebBaseLoader(document[0]).load() for document in documents_source]
+        vector_store_documents = []
+        vector_store_metadatas = []
+        vector_store_ids = []
 
-        docs_list = [item for sublist in docs for item in sublist]
+        for documentary_source in documents_source:
 
-        # Split documents
-        doc_splits = self.text_splitter.split_documents(docs_list)
+            loaded_document = WebBaseLoader(documentary_source[0]).load()[0]
+
+            splitted_doc = self.text_splitter.split_text(loaded_document.page_content)
+            metadatas = [{**loaded_document.metadata, "topic":documentary_source[1], "idx": i} for i in range(len(splitted_doc))]
+            ids = [f"{uuid.uuid4()}" for _ in range(len(splitted_doc))]
+
+            vector_store_documents.extend(splitted_doc)
+            vector_store_metadatas.extend(metadatas)
+            vector_store_ids.extend(ids)
 
         # Add to vectorDB
-        self.vectorstore.add_documents(doc_splits, documents_source)
+        self.vectorstore.add_documents(vector_store_documents,
+                                       vector_store_metadatas,
+                                       vector_store_ids)
 
     def get_documents(self, query: str):
         """ Retrieve the relevant documents associated with the query string
         """
         return self.vectorstore.get_documents(query)
 
-    def list_store_contents(self) ->  List[tuple]:
+    def list_store_contents(self) ->  set[tuple]:
         """ Returns a list of documents sources and associated topics contained
             in the vector store
         """

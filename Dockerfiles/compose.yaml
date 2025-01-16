@@ -1,0 +1,50 @@
+services:
+  ollama:
+    container_name: ollama
+    pull_policy: always
+    build:
+      context: .
+      dockerfile: ollama.dockerfile
+    ports:
+      - 11434:11434
+    restart: always
+    stop_signal: SIGKILL
+    security_opt:
+      - label=disable
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+  local-rag:
+    container_name: local-rag
+    pull_policy: always
+    build:
+      context: ../
+      dockerfile: Dockerfiles/local_rag.dockerfile
+    ports:
+      - 8501:8501
+    restart: always
+    env_file:
+      - path: ../.env-template
+        required: true
+      - path: ../.env
+        required: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+  vector-database:
+    container_name: chroma
+    image: chromadb/chroma
+    ports:
+      - 8000:8000
+volumes:
+  ollama:

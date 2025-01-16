@@ -5,7 +5,7 @@ RUN apt-get update \
  && rm /usr/lib/python*/EXTERNALLY-MANAGED
 
 WORKDIR /app/LocalRAG
-COPY ./LocalRAG/ .
+COPY ./LocalRAG/ requirements.txt .
 
 RUN pip3 install -r requirements.txt "gpt4all[cuda]"
 

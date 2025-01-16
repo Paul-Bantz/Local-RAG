@@ -28,7 +28,7 @@ else:
 session_documents = session_documents + list(set(stored_documents) - set(session_documents))
 
 # Display logic implementation
-def display_in_memory_store_gui():
+def display_basic_store_gui():
     """Displays a table containing the contents of the vector store
     """
 
@@ -110,8 +110,7 @@ with st.form("embed_doc_form", clear_on_submit=True):
         else:
             st.toast('Document already added', icon='ℹ️')
 
-if "In-Memory" == store_type:
-    display_in_memory_store_gui()
+display_basic_store_gui()
 
 docs_to_embed = list(set(session_documents) - set(stored_documents))
 

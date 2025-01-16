@@ -57,7 +57,7 @@ class RagAgent:
 
         self.embedding_interface.embed_web_documents(documents)
 
-    def list_store_contents(self) ->  List[tuple]:
+    def list_store_contents(self) ->  set[tuple]:
         """ Returns a list of documents sources and associated topics contained
             in the vector store
         """
